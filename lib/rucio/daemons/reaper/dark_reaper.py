@@ -29,7 +29,7 @@ import rucio.core.rse as rse_core
 import rucio.db.sqla.util
 from rucio.common import exception
 from rucio.common.config import config_get_bool
-from rucio.common.exception import ResourceTemporaryUnavailable, RSEAccessDenied, RSENotFound, ServiceUnavailable, SourceNotFound, VONotFound
+from rucio.common.exception import ResourceTemporaryUnavailable, RSEAccessDenied, ServiceUnavailable, SourceNotFound, VONotFound
 from rucio.common.logging import setup_logging
 from rucio.core.message import add_message
 from rucio.core.monitor import MetricManager
@@ -192,10 +192,8 @@ def run(
     total_workers: int = 1,
     chunk_size: int = 100,
     once: bool = False,
-    rses: "Optional[list[str]]" = None,
+    rses: "Optional[str]" = None,
     scheme: "Optional[str]" = None,
-    exclude_rses: "Optional[str]" = None,
-    include_rses: "Optional[str]" = None,
     vos: "Optional[list[str]]" = None,
     delay_seconds: int = 0,
     sleep_time: int = 300
@@ -213,13 +211,14 @@ def run(
     :param vos: VOs on which to look for RSEs. Only used in multi-VO mode.
                 If None, we either use all VOs if run from "def", or the current VO otherwise.
     """
-    rses = rses or []
     setup_logging(process_name=DAEMON_NAME)
 
     if rucio.db.sqla.util.is_old_db():
         raise exception.DatabaseException('Database was not updated, daemon won\'t start')
 
     logging.info('main: starting processes')
+
+    include_rses = rses
 
     multi_vo = config_get_bool('common', 'multi_vo', raise_exception=False, default=False)
     if not multi_vo:
@@ -242,23 +241,8 @@ def run(
     for vo in vos:
         all_rses.extend([rse['id'] for rse in rse_core.list_rses(filters={'vo': vo})])
 
-    if rses:
-        invalid = set(rses) - set([rse['rse'] for rse in all_rses])
-        if invalid:
-            msg = 'RSE{} {} cannot be found'.format('s' if len(invalid) > 1 else '',
-                                                    ', '.join([repr(rse) for rse in invalid]))
-            raise RSENotFound(msg)
-        rses = [rse for rse in all_rses if rse['rse'] in rses]
-    else:
-        rses = all_rses
-
-    if exclude_rses:
-        excluded_rses = [rse['id'] for rse in parse_expression(exclude_rses)]
-        rses = [rse for rse in rses if rse not in excluded_rses]
-
-    if include_rses:
-        included_rses = [rse['id'] for rse in parse_expression(include_rses)]
-        rses = [rse for rse in rses if rse in included_rses]
+    included_rses = [rse['id'] for rse in parse_expression(include_rses)]
+    rses = [rse for rse in all_rses if rse in included_rses]
 
     if not rses:
         logging.error('Dark Reaper: No RSEs found. Exiting.')

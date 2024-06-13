@@ -70,6 +70,6 @@ class TestAbacusAccount2:
         assert account_usages['files'] == 0
 
         if vo:
-            reaper.run(once=True, include_rses='vo=%s&(%s)' % (str(vo), rse), greedy=True)
+            reaper.run(once=True, rses='vo=%s&(%s)' % (str(vo), rse), greedy=True)
         else:
-            reaper.run(once=True, include_rses=rse, greedy=True)
+            reaper.run(once=True, rses=rse, greedy=True)

@@ -326,8 +326,6 @@ def run(
         group_bulk=1,
         group_policy='rule',
         rses=None,
-        include_rses=None,
-        exclude_rses=None,
         vos=None,
         bulk=100,
         source_strategy=None,
@@ -350,11 +348,16 @@ def run(
 
     multi_vo = config_get_bool('common', 'multi_vo', raise_exception=False, default=False)
     working_rses = None
+
+    include_rses = rses
+    rses = None
+    exclude_rses = None
+
     if rses or include_rses or exclude_rses:
-        working_rses = get_conveyor_rses(rses, include_rses, exclude_rses, vos)
+        working_rses = get_conveyor_rses(rses, vos)
         logging.info("RSE selection: RSEs: %s, Include: %s, Exclude: %s", rses, include_rses, exclude_rses)
     elif multi_vo:
-        working_rses = get_conveyor_rses(rses, include_rses, exclude_rses, vos)
+        working_rses = get_conveyor_rses(rses, vos)
         logging.info("RSE selection: automatic for relevant VOs")
     else:
         logging.info("RSE selection: automatic")
@@ -382,7 +385,7 @@ def run(
     cached_topology = ExpiringObjectCache(ttl=300, new_obj_fnc=lambda: Topology(ignore_availability=ignore_availability))
     submitter(
         once=once,
-        rses=working_rses,
+        rses=working_rses,  # type: ignore
         bulk=bulk,
         group_bulk=group_bulk,
         group_policy=group_policy,

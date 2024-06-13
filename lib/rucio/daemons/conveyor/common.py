@@ -485,7 +485,7 @@ def _submit_transfers(transfertool_obj, transfers, job_params, timeout=None, log
                     logger(logging.ERROR, 'Failed to cancel transfers %s on %s with error' % (eid, transfertool_obj), exc_info=True)
 
 
-def get_conveyor_rses(rses=None, include_rses=None, exclude_rses=None, vos=None, logger=logging.log):
+def get_conveyor_rses(rses=None, vos=None, logger=logging.log):
     """
     Get a list of rses for conveyor
 
@@ -497,6 +497,11 @@ def get_conveyor_rses(rses=None, include_rses=None, exclude_rses=None, vos=None,
     :param logger:        Optional decorated logger that can be passed from the calling daemons or servers.
     :return:              List of working rses
     """
+
+    include_rses = rses
+    rses = []
+    exclude_rses = None
+
     multi_vo = config_get_bool('common', 'multi_vo', raise_exception=False, default=False)
     if not multi_vo:
         if vos:

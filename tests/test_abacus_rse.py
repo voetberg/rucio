@@ -56,9 +56,9 @@ class TestAbacusRSE:
         rucio_client.add_replication_rule([{'scope': mock_scope.external, 'name': dataset}], 1, rse, lifetime=-1, activity=activity)
         cleaner.run(once=True)
         if vo:
-            reaper.run(once=True, include_rses='vo=%s&(%s)' % (str(vo), rse), greedy=True)
+            reaper.run(once=True, rses='vo=%s&(%s)' % (str(vo), rse), greedy=True)
         else:
-            reaper.run(once=True, include_rses=rse, greedy=True)
+            reaper.run(once=True, rses=rse, greedy=True)
         rse_update(once=True)
         rse_usage = get_rse_usage(rse_id=rse_id)[0]
         assert rse_usage['used'] == 0

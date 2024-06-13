@@ -41,11 +41,11 @@ def get_parser():
     parser.add_argument('--source-strategy', action="store", default=None, type=str,
                         help='Source strategy. Overload the strategy defined in config DB.')
     parser.add_argument('--exclude-rses', action="store", default=None, type=str,
-                        help='RSE expression to exclude')
+                        help=argparse.SUPPRESS)
     parser.add_argument('--include-rses', action="store", default=None, type=str,
-                        help='RSE expression to include')
+                        help=argparse.SUPPRESS)
     parser.add_argument('--rses', nargs='+', type=str,
-                        help='Explicit list of RSEs to include')
+                        help='RSE Expression for the daemon to act on.')
     parser.add_argument('--vos', nargs='+', type=str,
                         help='Optional list of VOs to consider. Only used in multi-VO mode.')
     parser.add_argument('--activities', nargs='+', type=str,
@@ -65,8 +65,6 @@ if __name__ == "__main__":
             total_threads=args.total_threads,
             bulk=args.bulk,
             group_bulk=args.group_bulk,
-            include_rses=args.include_rses,
-            exclude_rses=args.exclude_rses,
             rses=args.rses,
             vos=args.vos,
             source_strategy=args.source_strategy,

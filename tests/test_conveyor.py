@@ -217,7 +217,7 @@ def test_multihop_intermediate_replica_lifecycle(vo, did_factory, root_account, 
 
         # The intermediate replica is protected by its state (Copying)
         rucio.daemons.reaper.reaper.REGION.invalidate()
-        reaper(once=True, rses=[], include_rses=jump_rse_name, exclude_rses=None)
+        reaper(once=True, rses=jump_rse_name)
         replica = replica_core.get_replica(rse_id=jump_rse_id, **did)
         assert replica['state'] == ReplicaState.COPYING
 
@@ -239,7 +239,7 @@ def test_multihop_intermediate_replica_lifecycle(vo, did_factory, root_account, 
         assert replica['state'] == ReplicaState.AVAILABLE
 
         rucio.daemons.reaper.reaper.REGION.invalidate()
-        reaper(once=True, rses=[], include_rses='test_container_xrd=True', exclude_rses=None)
+        reaper(once=True, rses='test_container_xrd=True')
 
         with pytest.raises(ReplicaNotFound):
             replica_core.get_replica(rse_id=jump_rse_id, **did)
@@ -1500,7 +1500,7 @@ def test_two_multihops_same_intermediate_rse(rse_factory, did_factory, root_acco
 
     # One of the intermediate replicas is eligible for deletion. Others are blocked by entries in source table
     reaper_cache_region.invalidate()
-    reaper(once=True, rses=[], include_rses='|'.join([rse2, rse3, rse4, rse6]), exclude_rses=None)
+    reaper(once=True, rses='|'.join([rse2, rse3, rse4, rse6]))
     with pytest.raises(ReplicaNotFound):
         replica_core.get_replica(rse_id=rse_id_second_to_last_submit, **did)
     for rse_id in [rse2_id, rse3_id, rse_id_second_to_last_queued]:
@@ -1514,7 +1514,7 @@ def test_two_multihops_same_intermediate_rse(rse_factory, did_factory, root_acco
 
     # All intermediate replicas can be deleted
     reaper_cache_region.invalidate()
-    reaper(once=True, rses=[], include_rses='|'.join([rse2, rse3, rse4, rse6]), exclude_rses=None)
+    reaper(once=True, rses='|'.join([rse2, rse3, rse4, rse6]))
     for rse_id in [rse2_id, rse3_id, rse4_id, rse6_id]:
         with pytest.raises(ReplicaNotFound):
             replica_core.get_replica(rse_id=rse_id, **did)

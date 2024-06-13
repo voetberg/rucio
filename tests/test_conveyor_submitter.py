@@ -101,10 +101,11 @@ def test_skip_requests_from_expired_rules(rse_factory, did_factory, root_account
     distance_core.add_distance(src_rse_id, dst_rse_id, distance=10)
 
     did = did_factory.upload_test_file(rse_name=src_rse_name)
-    rule = rule_core.add_rule(dids=[did], account=root_account, copies=1,
-                              rse_expression=dst_rse_name, grouping='ALL',
-                              weight=None, lifetime=-1, locked=False,
-                              subscription_id=None)[0]
+    rule_core.add_rule(
+        dids=[did], account=root_account, copies=1,
+        rse_expression=dst_rse_name, grouping='ALL',
+        weight=None, lifetime=-1, locked=False,
+        subscription_id=None)[0]
     request = request_core.get_request_by_did(rse_id=dst_rse_id, **did)
     assert request_core.get_request(request_id=request['id'])['state'] == RequestState.QUEUED
 
@@ -239,7 +240,7 @@ def test_source_avoid_deletion(caches_mock, rse_factory, did_factory, root_accou
 
     # Reaper will not delete a file which only has one replica if there is any pending transfer for it
     reaper_region.invalidate()
-    reaper(once=True, rses=[], include_rses=any_source, exclude_rses=None)
+    reaper(once=True, rses=any_source)
     replica = next(iter(replica_core.list_replicas(dids=[did], rse_expression=any_source)))
     assert len(replica['pfns']) == 1
 
@@ -253,7 +254,7 @@ def test_source_avoid_deletion(caches_mock, rse_factory, did_factory, root_accou
 
     # None of the replicas will be removed. They are protected by an entry in the sources table
     reaper_region.invalidate()
-    reaper(once=True, rses=[], include_rses=any_source, exclude_rses=None)
+    reaper(once=True, rses=any_source)
     replica = next(iter(replica_core.list_replicas(dids=[did], rse_expression=any_source)))
     assert len(replica['pfns']) == 2
 
@@ -268,7 +269,7 @@ def test_source_avoid_deletion(caches_mock, rse_factory, did_factory, root_accou
     __delete_sources(src_rse1_id, **did)
     __delete_sources(src_rse2_id, **did)
     reaper_region.invalidate()
-    reaper(once=True, rses=[], include_rses=any_source, exclude_rses=None)
+    reaper(once=True, rses=any_source)
     replica = next(iter(replica_core.list_replicas(dids=[did], rse_expression=any_source)))
     assert len(replica['pfns']) == 1
 

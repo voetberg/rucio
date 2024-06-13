@@ -396,9 +396,9 @@ class TestGatewayExternalRepresentation:
         # clean up files
         cleaner.run(once=True)
         if vo2:
-            reaper.run(once=True, include_rses='vo=%s&(%s)' % (vo, rse_mock), greedy=True)
+            reaper.run(once=True, rses='vo=%s&(%s)' % (vo, rse_mock), greedy=True)
         else:
-            reaper.run(once=True, include_rses=rse_mock, greedy=True)
+            reaper.run(once=True, rses=rse_mock, greedy=True)
         abacus_rse.run(once=True)
 
         out = gateway_rse.parse_rse_expression(f'{rse1}|{rse2}', vo=vo)

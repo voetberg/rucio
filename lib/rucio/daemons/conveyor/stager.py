@@ -83,9 +83,7 @@ def run(
     total_threads: int = 1,
     group_bulk: int = 1,
     group_policy: str = 'rule',
-    rses: Optional[list[str]] = None,
-    include_rses: Optional[str] = None,
-    exclude_rses: Optional[str] = None,
+    rses: Optional[str] = None,
     vos: Optional[list[str]] = None,
     bulk: int = 100,
     source_strategy: Optional[str] = None,
@@ -103,13 +101,16 @@ def run(
 
     multi_vo = config_get_bool('common', 'multi_vo', raise_exception=False, default=False)
     working_rses = None
+
+    include_rses = rses
+    rses = None
+    exclude_rses = None
+
     if rses or include_rses or exclude_rses:
-        working_rses = get_conveyor_rses(rses, include_rses, exclude_rses, vos)
-        logging.info("RSE selection: RSEs: %s, Include: %s, Exclude: %s" % (rses,
-                                                                            include_rses,
-                                                                            exclude_rses))
+        working_rses = get_conveyor_rses(rses, vos)
+        logging.info(f"RSE selection: RSE Expression: {rses}")
     elif multi_vo:
-        working_rses = get_conveyor_rses(rses, include_rses, exclude_rses, vos)
+        working_rses = get_conveyor_rses(rses, vos)
         logging.info("RSE selection: automatic for relevant VOs")
     else:
         logging.info("RSE selection: automatic")

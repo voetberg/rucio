@@ -57,9 +57,9 @@ class TestAbacusCollectionReplica:
         undertaker.run(once=True)
         cleaner.run(once=True)
         if vo:
-            reaper.run(once=True, include_rses='vo=%s&(%s|%s)' % (str(vo), rse1, rse2), greedy=True)
+            reaper.run(once=True, rses='vo=%s&(%s|%s)' % (str(vo), rse1, rse2), greedy=True)
         else:
-            reaper.run(once=True, include_rses='(%s|%s)' % (rse1, rse2), greedy=True)
+            reaper.run(once=True, rses='(%s|%s)' % (rse1, rse2), greedy=True)
 
     def test_abacus_collection_replica(self, vo, mock_scope, rse_factory, did_factory, rucio_client):
         """ ABACUS (COLLECTION REPLICA): Test update of collection replica. """
@@ -111,9 +111,9 @@ class TestAbacusCollectionReplica:
         cleaner.run(once=True)
         reaper.REGION.invalidate()
         if vo:
-            reaper.run(once=True, include_rses='vo=%s&(%s)' % (str(vo), rse), greedy=True)
+            reaper.run(once=True, rses='vo=%s&(%s)' % (str(vo), rse), greedy=True)
         else:
-            reaper.run(once=True, include_rses=rse, greedy=True)
+            reaper.run(once=True, rses=rse, greedy=True)
         activity = get_schema_value('ACTIVITY')['enum'][0]
         rucio_client.add_replication_rule([{'scope': mock_scope.external, 'name': dataset}], 1, rse, lifetime=-1, activity=activity)
         collection_replica.run(once=True)

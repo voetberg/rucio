@@ -66,7 +66,7 @@ DAEMON_NAME = 'reaper'
 EXCLUDED_RSE_GAUGE = METRICS.gauge('excluded_rses.{rse}', documentation='Temporarly excluded RSEs')
 
 
-def get_rses_to_process(rses, include_rses, exclude_rses, vos):
+def get_rses_to_process(rses, vos):
     """
     Return the list of RSEs to process based on rses, include_rses and exclude_rses
 
@@ -78,6 +78,10 @@ def get_rses_to_process(rses, include_rses, exclude_rses, vos):
 
     :returns: A list of RSEs to process
     """
+    include_rses = rses
+    rses = []
+    exclude_rses = None
+
     multi_vo = config_get_bool('common', 'multi_vo', raise_exception=False, default=False)
     if not multi_vo:
         if vos:
@@ -372,7 +376,7 @@ def __check_rse_usage(rse: RseData, greedy: bool = False, logger: "Callable[...,
     return 0, True
 
 
-def reaper(rses, include_rses, exclude_rses, vos=None, chunk_size=100, once=False, greedy=False,
+def reaper(rses, vos=None, chunk_size=100, once=False, greedy=False,
            scheme=None, delay_seconds=0, sleep_time=60, auto_exclude_threshold=100, auto_exclude_timeout=600):
     """
     Main loop to select and delete files.
@@ -400,8 +404,6 @@ def reaper(rses, include_rses, exclude_rses, vos=None, chunk_size=100, once=Fals
         run_once_fnc=functools.partial(
             run_once,
             rses=rses,
-            include_rses=include_rses,
-            exclude_rses=exclude_rses,
             vos=vos,
             chunk_size=chunk_size,
             greedy=greedy,
@@ -413,7 +415,7 @@ def reaper(rses, include_rses, exclude_rses, vos=None, chunk_size=100, once=Fals
     )
 
 
-def run_once(rses, include_rses, exclude_rses, vos, chunk_size, greedy, scheme,
+def run_once(rses, vos, chunk_size, greedy, scheme,
              delay_seconds, auto_exclude_threshold, auto_exclude_timeout,
              heartbeat_handler, **_kwargs):
 
@@ -442,7 +444,7 @@ def run_once(rses, include_rses, exclude_rses, vos, chunk_size, greedy, scheme,
             logger(logging.ERROR, 'Reaper: Judge evaluator backlog duration hit, stopping operation')
             return must_sleep
 
-    rses_to_process = get_rses_to_process(rses, include_rses, exclude_rses, vos)
+    rses_to_process = get_rses_to_process(rses, vos)
     rses_to_process = [RseData(id_=rse['id'], name=rse['rse'], columns=rse) for rse in rses_to_process]
     if not rses_to_process:
         logger(logging.ERROR, 'Reaper: No RSEs found. Will sleep for 30 seconds')
@@ -631,7 +633,7 @@ def stop(signum: "Optional[int]" = None, frame: "Optional[FrameType]" = None) ->
     GRACEFUL_STOP.set()
 
 
-def run(threads=1, chunk_size=100, once=False, greedy=False, rses=None, scheme=None, exclude_rses=None, include_rses=None, vos=None, delay_seconds=0, sleep_time=60, auto_exclude_threshold=100, auto_exclude_timeout=600):
+def run(threads=1, chunk_size=100, once=False, greedy=False, rses=None, scheme=None, vos=None, delay_seconds=0, sleep_time=60, auto_exclude_threshold=100, auto_exclude_timeout=600):
     """
     Starts up the reaper threads.
 
@@ -659,7 +661,7 @@ def run(threads=1, chunk_size=100, once=False, greedy=False, rses=None, scheme=N
         raise DatabaseException('Database was not updated, daemon won\'t start')
 
     logging.log(logging.INFO, 'main: starting processes')
-    rses_to_process = get_rses_to_process(rses, include_rses, exclude_rses, vos)
+    rses_to_process = get_rses_to_process(rses, vos)
     if not rses_to_process:
         logging.log(logging.ERROR, 'Reaper: No RSEs found. Exiting.')
         return
@@ -669,8 +671,6 @@ def run(threads=1, chunk_size=100, once=False, greedy=False, rses=None, scheme=N
     logging.log(logging.INFO, 'starting reaper threads')
     threads_list = [threading.Thread(target=reaper, kwargs={'once': once,
                                                             'rses': rses,
-                                                            'include_rses': include_rses,
-                                                            'exclude_rses': exclude_rses,
                                                             'vos': vos,
                                                             'chunk_size': chunk_size,
                                                             'greedy': greedy,
