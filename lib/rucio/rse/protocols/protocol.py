@@ -21,7 +21,7 @@ import logging
 from abc import ABC, abstractmethod
 from configparser import NoOptionError, NoSectionError
 from typing import TYPE_CHECKING, Any, Optional, TypeVar
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 from rucio.common import config, exception
 from rucio.common.constants import RseAttr
@@ -422,9 +422,9 @@ class RSEProtocol(ABC):
             :param scope: scope
             :param name: filename
 
-            :returns: RSE specific URI of the physical file
+            :returns: RSE specific encoded URI of the physical file
         """
-        return self.translator.path(scope, name)
+        return urlencode(self.translator.path(scope, name))
 
     def _get_path_nondeterministic_server(self, scope, name):  # pylint: disable=invalid-name
         """ Provides the path of a replica for non-deterministic sites. Will be assigned to get path by the __init__ method if necessary. """

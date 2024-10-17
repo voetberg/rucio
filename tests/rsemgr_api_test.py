@@ -34,16 +34,19 @@ class MgrTestCases:
         "2_rse_local_put.raw",
         "3_rse_local_put.raw",
         "4_rse_local_put.raw",
+        "5_rse_local_put.raw.$$",
     ]
     files_local_and_remote = [
         "1_rse_local_and_remote_put.raw",
         "2_rse_local_and_remote_put.raw",
+        "3_rse_local_and_remote_put.raw.$$",
     ]
     files_remote = [
         "1_rse_remote_get.raw",
         "2_rse_remote_get.raw",
         "3_rse_remote_get.raw",
         "4_rse_remote_get.raw",
+        "4_rse_remote_get.raw.!!",
         "1_rse_remote_delete.raw",
         "2_rse_remote_delete.raw",
         "3_rse_remote_delete.raw",
