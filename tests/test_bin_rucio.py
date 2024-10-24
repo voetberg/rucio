@@ -253,7 +253,7 @@ class TestBinRucio:
         exitcode, out, err = execute(cmd)
         print(out, err)
         assert exitcode == 0
-        cmd = 'rucio-admin -v rse add-distance --distance 1 --ranking 1 %s %s' % (temprse2, temprse1)
+        cmd = 'rucio-admin rse add-distance --distance 1 --ranking 1 %s %s' % (temprse2, temprse1)
         print(self.marker + cmd)
         exitcode, out, err = execute(cmd)
         print(out, err)

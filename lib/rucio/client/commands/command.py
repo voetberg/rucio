@@ -113,7 +113,7 @@ class Commands:
         )  # NOQA: W503
         auth_args.add_argument(
             "--oidc-refresh-lifetime",
-            help="Max lifetime in hours for this an access token will be refreshed by asynchronous Rucio daemon. "
+            help="Max lifetime in hours for this access token; the token will be refreshed by an asynchronous Rucio daemon. "
             + "If not specified, refresh will be stopped after 4 days. This option is effective only if --oidc-scope includes offline_access scope for a refresh token to be granted to Rucio.",
         )  # NOQA: W503
         auth_args.add_argument("--oidc-issuer", help="Defines which Identity Provider is going to be used. The issuer string must correspond " + "to the keys configured in the /etc/idpsecrets.json auth server configuration file.")  # NOQA: W503
