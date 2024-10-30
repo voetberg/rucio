@@ -1,132 +1,116 @@
 # Account
 ```
-account [list]
-account add 
-account info 
-account remove 
-account usage 
-account set
-
-account ban add
-account ban remove
-
-account attribute list 
-account attribute add 
-account attribute remove 
-
-account limit list 
-account limit add 
-account limit remove
-
-account identity list
-account identity add 
-account identity remove 
+rucio account list
+rucio account add
+rucio account show
+rucio account remove
+rucio account history
+rucio account update
+rucio account ban add
+rucio account ban remove
+rucio account attribute list
+rucio account attribute add
+rucio account attribute remove
+rucio account limit list
+rucio account limit add
+rucio account limit remove
+rucio account identity list
+rucio account identity add
+rucio account identity remove
 ```
 
 # Config 
 ```
-config [list]
-config set
-config remove
+rucio config list
+rucio config add
+rucio config remove
 ```
 
 # DID 
 ```
-did [list]
-did stat
-did remove
-did touch
-did parent
-did attach
-did detach
-did upload
-did download
-
-did content list
-did content history
-did content close
-did content open
-
-did metadata list
-did metadata add
-did metadata remove
-
-did container add
-
-did dataset add
+rucio did list
+rucio did show
+rucio did remove
+rucio did touch
+rucio did parent
+rucio did attach
+rucio did detach
+rucio did upload
+rucio did download
+rucio did content list
+rucio did content history
+rucio did content close
+rucio did content open
+rucio did metadata list
+rucio did metadata add
+rucio did metadata remove
+rucio did container add
+rucio did dataset add
 ```
 
 # Replica 
 ```
-replica [list]
-replica dataset 
-replica pfn 
-replica tombstone
-
-replica state suspicious
-replica state quarantine
-replica state bad
-replica state temp-unavailable
+rucio replica list
+rucio replica dataset
+rucio replica pfn
+rucio replica tombstone
+rucio replica state suspicious
+rucio replica state quarantine
+rucio replica state bad
+rucio replica state temp-unavailable
 ```
 
 # RSE
 ```
-rse [list]
-rse info
-rse remove
-rse add
-rse set
-
-rse attribute list
-rse attribute set
-rse attribute remove
-
-rse distance list
-rse distance add
-rse distance remove
-rse distance set
-
-rse protocol add
-rse protocol remove
-
-rse limit add
-rse limit remove
-
-rse qos list
-rse qos add
-rse qos remove
+rucio rse list
+rucio rse show
+rucio rse remove
+rucio rse add
+rucio rse update
+rucio rse attribute list
+rucio rse attribute add
+rucio rse attribute remove
+rucio rse distance list
+rucio rse distance add
+rucio rse distance remove
+rucio rse distance set
+rucio rse protocol add
+rucio rse protocol remove
+rucio rse limit add
+rucio rse limit remove
+rucio rse qos list
+rucio rse qos add
+rucio rse qos remove
 
 ```
 
 # Rule 
 ```
-rule  add
-rule  remove
-rule  info
-rule  history
-rule  set
-rule  [list]
-
-
+rucio rule add
+rucio rule remove
+rucio rule show
+rucio rule history
+rucio rule update
+rucio rule list
 ```
 
 # Scope 
 ```
-scope [list]
-scope add
+rucio scope [list]
+rucio scope add
 ```
 
 # Subscription
 ```
-subscription [list]
-subscription set
-subscription add
-subscription touch
+rucio subscription list
+rucio subscription update
+rucio subscription add
+rucio subscription touch
 
 ```
 
 # Lifetime-Exception 
 ```
-lifetime-exception [add]
+rucio lifetime-exception [add]
 ```
 
