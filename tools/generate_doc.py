@@ -216,7 +216,7 @@ def render_bin_help_pages(rucio_src: str):
             with CommandErrorWrapper(procs):
                 try:
                     procs.pop(0).wait(timeout=10)
-                except TimeoutError:
+                except sh.TimeoutException:
                     raise Exception(f"Failed to generate for {procs[0]}")
 
             proc = next(procgen, None)
