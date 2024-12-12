@@ -334,11 +334,11 @@ def test_did_metadata(rucio_client, root_account):
 
 def test_upload_download():
     # DID upload/download not tested for implementation as their tests are identical to the base rucio bin versions
-    cmd = "rucio upload --files there-is-not-a-file-here --rse mock"
+    cmd = "rucio upload there-is-not-a-file-here --rse mock"
     exitcode, _, _ = execute(cmd)
     assert exitcode != 2  # Failure is not due to the command structure
 
-    cmd = "rucio download --did fake:fake --dir ."
+    cmd = "rucio download fake:fake --dir ."
     exitcode, _, _ = execute(cmd)
     assert exitcode != 2  # Failure is not due to the command structure
 
