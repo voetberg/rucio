@@ -20,27 +20,7 @@ from typing import Optional
 from rucio.client.commands.bin_legacy.rucio import main as main_legacy
 from rucio.client.commands.command import main
 
-
-def make_warning():
-    base_warning = "\nWARNING: This method is being deprecated."
-    new_command = map_legacy_command()
-    if new_command is not None:
-        warning = f"{base_warning}\nPlease replace your command with `rucio {' '.join(new_command)}`.\n"
-    else:
-        warning = base_warning + "\nPlease view rucio -h for an updated help menu.\n"
-
-    return warning
-
-
-def map_legacy_command() -> Optional[list[str]]:
-    try:
-        command = [arg for arg in sys.argv if arg[0] != "-" or arg in ("-h", "--version")][1]
-    except IndexError:
-        command = None
-
-    new_command = None
-    if command not in ("-h", "--version", None):
-        command_map = {
+command_map = {
             "list-file-replicas": ["replica", "list", "file"],
             "list-dataset-replicas": ["replica", "list", "dataset"],
             "add-dataset": ["did", "add", "--type dataset"],
@@ -79,6 +59,28 @@ def map_legacy_command() -> Optional[list[str]]:
             "touch": ["did", "update", "--touch"],
             "add-lifetime-exception": ["lifetime-exception", "add"],
         }
+
+
+def make_warning():
+    base_warning = "\nWARNING: This method is being deprecated."
+    new_command = map_legacy_command()
+    if new_command is not None:
+        warning = f"{base_warning}\nPlease replace your command with `rucio {' '.join(new_command)}`.\n"
+    else:
+        warning = base_warning + "\nPlease view rucio -h for an updated help menu.\n"
+
+    return warning
+
+
+def map_legacy_command() -> Optional[list[str]]:
+    try:
+        command = [arg for arg in sys.argv if arg[0] != "-" or arg in ("-h", "--version")][1]
+    except IndexError:
+        command = None
+
+    new_command = None
+    if command not in ("-h", "--version", None):
+
         try:
             new_command = command_map[command]
         except KeyError:
@@ -88,11 +90,15 @@ def map_legacy_command() -> Optional[list[str]]:
 
 
 if __name__ == "__main__":
-    commands = ("-h", "--help", "--version", "account", "config", "did", "replica", "rse", "rule", "scope", "subscription", "ping", "whoami", "test-server", "lifetime-exception", "upload", "download")
-    first_command = [arg for arg in sys.argv if arg[0] != "-" or arg in ("-h", "--help", "--version")][1]
     is_legacy = '--legacy' in sys.argv
 
-    if (first_command in commands) and not is_legacy:
+    new_cli = True
+    for arg in sys.argv:
+        if arg in command_map.keys():
+            new_cli = False
+            break
+
+    if new_cli and not is_legacy:
         main()
 
     elif is_legacy:
