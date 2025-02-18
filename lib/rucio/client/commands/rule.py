@@ -81,6 +81,7 @@ class Rule(CommandBase):
     def show_namespace(self, parser: "ArgumentParser") -> None:
         parser.add_argument("--rule-id", help="The rule ID, for accessing an existing rule.")
         parser.add_argument("--examine", action="store_true", help="Detailed analysis of transfer errors")
+        parser.add_argument("--csv", action="store_true", help="Write output to a CSV")
 
     def list_namespace(self, parser: "ArgumentParser") -> None:
         parser.add_argument("-a", "--account", dest="rule_account", action="store", help="The account of the rule")

@@ -1443,47 +1443,70 @@ def info_rule(args, client, logger, console, spinner):
     if args.examine:
         output = []
         analysis = client.examine_replication_rule(rule_id=args.rule_id)
+
+        if analysis['transfers']:
+            for transfer in analysis['transfers']:
+                output.append(
+                    [
+                        transfer["scope"],
+                        transfer["name"],
+                        {
+                            "RSE": str(transfer["rse"]),
+                            "Attempts": str(transfer["attempts"]),
+                            "Last retry": str(transfer["last_time"]),
+                            "Last error": str(transfer["last_error"]),
+                            'Available sources:': ', '.join([source[0] for source in transfer['sources'] if source[1]]),
+                            'Blocklisted sources:': ', '.join([source[0] for source in transfer['sources'] if not source[1]])
+                        },
+                    ]
+                )
+
         if cli_config == 'rich':
+            rich_output = []
             keyword_styles = {**CLITheme.BOOLEAN, **CLITheme.DID_TYPE, **CLITheme.RULE_STATE}
+
             rule_status = " ".join([f'[{keyword_styles.get(word, "default")}]{word}[/]' for word in analysis['rule_error'].split()])
-            output.append(f'Status of the replication rule: {rule_status}')
+            rich_output.append(f"Status of the replication rule: {rule_status}")
             if analysis['transfers']:
-                output.append('[b]STUCK Requests:[/]')
-                for transfer in analysis['transfers']:
-                    output.append(Padding.indent(Text(f"{transfer['scope']}:{transfer['name']}", style=CLITheme.SUBHEADER_HIGHLIGHT), 2))
-                    table_data = [['RSE:', str(transfer['rse'])],
-                                  ['Attempts:', str(transfer['attempts'])],
-                                  ['Last retry:', str(transfer['last_time'])],
-                                  ['Last error:', str(transfer['last_source'])],
-                                  ['Available sources:', ', '.join([source[0] for source in transfer['sources'] if source[1]])],
-                                  ['Blocklisted sources:', ', '.join([source[0] for source in transfer['sources'] if not source[1]])]]
+                rich_output.append('[b]STUCK Requests:[/]')
+                for transfer in output:
+                    rich_output.append(Padding.indent(Text(f"{transfer[0]}:{transfer[1]}", style=CLITheme.SUBHEADER_HIGHLIGHT), 2))
+                    table_data = [[key, value] for key, value in transfer[2].items()]
                     table = generate_table(table_data, row_styles=['none'], col_alignments=['left', 'left'])
-                    output.append(Padding.indent(table, 2))
+                    rich_output.append(Padding.indent(table, 2))
 
             spinner.stop()
-            print_output(*output, console=console, no_pager=args.no_pager)
+            print_output(*rich_output, console=console, no_pager=args.no_pager)
+
+        elif args.csv:
+            header = ["DID"] + list(output[0][2].keys())
+            if analysis['transfers']:
+                print(*header, sep=',')
+                for row in output:
+                    did = f"{row[0]}:{row[1]}"
+                    print(did, *row[2].values(), sep=',')
         else:
-            analysis = client.examine_replication_rule(rule_id=args.rule_id)
             print('Status of the replication rule: %s' % analysis['rule_error'])
             if analysis['transfers']:
                 print('STUCK Requests:')
-                for transfer in analysis['transfers']:
-                    print('  %s:%s' % (transfer['scope'], transfer['name']))
-                    print('    RSE:                  %s' % str(transfer['rse']))
-                    print('    Attempts:             %s' % str(transfer['attempts']))
-                    print('    Last Retry:           %s' % str(transfer['last_time']))
-                    print('    Last error:           %s' % str(transfer['last_error']))
-                    print('    Last source:          %s' % str(transfer['last_source']))
-                    print('    Available sources:    %s' % ', '.join([source[0] for source in transfer['sources'] if source[1]]))
-                    print('    Blocklisted sources:  %s' % ', '.join([source[0] for source in transfer['sources'] if not source[1]]))
+                for transfer in output:
+                    print(f"  {transfer[0]}:{transfer[1]}")
+                    for key, value in transfer[2].items():
+                        print(f"    {key}: {value}")
+
     else:
         rule = client.get_replication_rule(rule_id=args.rule_id)
+
         if cli_config == 'rich':
             keyword_styles = {**CLITheme.BOOLEAN, **CLITheme.DID_TYPE, **CLITheme.RULE_STATE}
             table_data = [(k, Text(str(v), style=keyword_styles.get(str(v), 'default'))) for k, v in sorted(rule.items())]
             table = generate_table(table_data, col_alignments=['left', 'left'], row_styles=['none'])
             spinner.stop()
             print_output(table, console=console, no_pager=args.no_pager)
+
+        elif args.csv:  # Included for completeness, not sure how useful this is in practice
+            print(*[f"{key}={value}" for key, value in rule.items()], sep=',')
+
         else:
             print("Id:                         %s" % rule['id'])
             print("Account:                    %s" % rule['account'])
@@ -2642,7 +2665,7 @@ You can filter by key/value, e.g.::
     info_rule_parser.set_defaults(function=info_rule)
     info_rule_parser.add_argument(dest='rule_id', action='store', help='The rule ID')
     info_rule_parser.add_argument('--examine', dest='examine', action='store_true', help='Detailed analysis of transfer errors')
-
+    info_rule_parser.add_argument('--csv', action='store_true', help='Output in CSV format')
     # The list_rules command
     list_rules_parser = subparsers.add_parser('list-rules', help='List replication rules.', formatter_class=argparse.RawDescriptionHelpFormatter, epilog='''Usage example
 """""""""""""
