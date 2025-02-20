@@ -224,7 +224,8 @@ class TestBinRucio:
         assert 'Added new non-deterministic RSE: %s\n' % tmp_val in out
 
     def test_list_rses(self):
-        """CLIENT(ADMIN): List RSEs"""
+        """CLIENT(USER/ADMIN): List RSEs"""
+        # TODO Test filter
         tmp_val = rse_name_generator()
         cmd = 'rucio-admin rse add %s' % tmp_val
         exitcode, out, err = execute(cmd)
@@ -233,6 +234,18 @@ class TestBinRucio:
         exitcode, out, err = execute(cmd)
         print(out, )
         assert tmp_val in out
+
+        cmd = 'rucio-admin rse list --csv'
+        _, out, _ = execute(cmd)
+        assert tmp_val in [o.rstrip('\n') for o in out.split(',')]
+
+        cmd = 'rucio list-rses'
+        _, out, _ = execute(cmd)
+        assert tmp_val in out
+
+        cmd = 'rucio list-rses --csv'
+        _, out, _ = execute(cmd)
+        assert tmp_val in [o.rstrip('\n') for o in out.split(',')]
 
     def test_rse_add_distance(self):
         """CLIENT (ADMIN): Add distance to RSE"""
