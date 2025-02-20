@@ -768,7 +768,10 @@ def list_scopes(args, client, logger, console, spinner):
         scopes = client.list_scopes_for_account(args.account)
     else:
         scopes = client.list_scopes()
-    if cli_config == 'rich':
+
+    if args.csv:
+        print(*(scope for scope in scopes if "mock" not in scopes), sep=',')
+    elif cli_config == 'rich':
         scopes = [[scope] for scope in sorted(scopes) if 'mock' not in scope]
         table = generate_table(scopes, headers=['SCOPE'], col_alignments=['left'])
         spinner.stop()
@@ -2125,6 +2128,7 @@ def get_parser():
                                                           '\n')
     list_scope_parser.set_defaults(which='list_scopes')
     list_scope_parser.add_argument('--account', dest='account', action='store', help='Account name')
+    list_scope_parser.add_argument("--csv", action="store_true", help="Output the list of scopes as a csv, header is scope")
 
     # The config subparser
     config_parser = subparsers.add_parser('config',

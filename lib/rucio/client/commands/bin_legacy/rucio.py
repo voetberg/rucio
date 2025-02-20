@@ -546,7 +546,10 @@ def list_scopes(args, client, logger, console, spinner):
         spinner.start()
 
     scopes = client.list_scopes()
-    if cli_config == 'rich':
+
+    if args.csv:
+        print(*(scope for scope in scopes), sep=',')
+    elif cli_config == 'rich':
         table = generate_table([[scope] for scope in sorted(scopes)], headers=['SCOPE'], col_alignments=['left'])
         spinner.stop()
         print_output(table, console=console, no_pager=args.no_pager)
@@ -2476,6 +2479,7 @@ You can filter by key/value, e.g.::
     ''')
 
     scope_list_parser.set_defaults(function=list_scopes)
+    scope_list_parser.add_argument("--csv", action="store_true", help="Output the list of scopes as a csv, header is scope")
 
     # The close command
     close_parser = subparsers.add_parser('close', help='Close a dataset or container.')
