@@ -16,6 +16,8 @@ import json
 import logging
 import os
 import shutil
+from random import choice
+from string import ascii_uppercase
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
@@ -27,8 +29,9 @@ from rucio.common.checksum import adler32
 from rucio.common.config import config_add_section, config_set
 from rucio.common.constants import RseAttr
 from rucio.common.exception import InputValidationError, NoFilesUploaded, NotAllFilesUploaded, ResourceTemporaryUnavailable
-from rucio.common.utils import generate_uuid
+from rucio.common.utils import execute, generate_uuid
 from rucio.core.rse import add_protocol, add_rse_attribute
+from rucio.tests.common import did_name_generator
 
 
 @pytest.fixture
@@ -444,3 +447,73 @@ def test_upload_registration_fail(rse, scope, upload_client_registration_fail, f
             'did_name': fn,
             'guid': generate_uuid()
         }])
+
+
+@pytest.mark.parametrize("structure,failure", [
+    ({"container": ["file1", "file2", {"dataset": ["file3", "file4"]}]}, True),  # Cannot have both files and datasets in a container
+    ({
+        "container": {
+            "dataset": ["file1", "file2"]
+            },
+        "container2": {
+            "dataset": ["file1", {"dataset2": ["file1"]}]
+        }
+    }, True),  # One valid container, another invalid container
+    ({
+        "container": {"container2": {"dataset": {"dataset2": ["file1", {"dataset3": ["file2"]}]}}},
+    }, True),  # Same issue but further down the tree
+    ({"container": {"dataset": ["file1"], "dataset2": ["file2"]}}, False),  # One valid container
+    ({
+        "container": {"dataset": ["file1"], "dataset2": ["file2"]},
+        "container2": {"dataset": ["file1"], "dataset2": ["file2"]}
+    }, False)  # Two valid containers
+])
+def test_upload_recursive(structure, failure, rse_factory, scope, upload_client, caplog):
+    """
+    Ensure logic for recursive uploads.
+
+    Containers only contain collection DIDs of one type, and never files. Datasets only contain files or other datasets, but not at the same time.
+    """
+
+    def recursive_create(dir_path, contents):
+        for value in contents.values():
+            directory = did_name_generator()
+
+            if isinstance(value, list):
+                for item in value:
+                    if isinstance(item, str):
+                        file_path = os.path.join(dir_path, directory,  ''.join(choice(ascii_uppercase) for _ in range(5)))
+                        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                        execute(f'dd if=/dev/urandom of={file_path} count={2} bs=1')
+
+                    elif isinstance(item, dict):
+                        subdir = did_name_generator()
+                        sub_dir_path = os.path.join(dir_path, directory, subdir)
+                        os.makedirs(sub_dir_path, exist_ok=True)
+                        recursive_create(sub_dir_path, item)
+                    else:
+                        raise ValueError(f"Invalid item type: {type(item)} in structure")
+
+            else:
+                # item is a subdirectory
+                sub_dir_path = os.path.join(dir_path, directory)
+                os.makedirs(sub_dir_path, exist_ok=True)
+                recursive_create(sub_dir_path, value)
+
+    with TemporaryDirectory() as tmp_dir:
+
+        recursive_create(tmp_dir, structure)
+
+        rse, _ = rse_factory.make_posix_rse()
+        items = {
+            'path': tmp_dir,
+            'rse': rse,
+            'did_scope': scope,
+            'did_name': os.path.basename(tmp_dir),
+            'recursive': True,
+        }
+        if failure:
+            with pytest.raises(InputValidationError):
+                upload_client._collect_files_recursive(items)
+        else:
+            upload_client._collect_files_recursive(items)
