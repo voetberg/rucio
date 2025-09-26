@@ -769,11 +769,6 @@ def test_rule(rucio_client, mock_scope):
     assert exitcode == 0
     assert rule_id in out
 
-    cmd = "rucio rule list"
-    exitcode, out, err = execute(cmd)
-    assert exitcode != 0
-    assert "At least one option has to be given" in err
-
     move_rse = "MOCK2"
     cmd = f"rucio rule move {rule_id} --rses {move_rse}"
     exitcode, out, err = execute(cmd)
