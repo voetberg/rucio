@@ -769,6 +769,11 @@ def test_rule(rucio_client, mock_scope):
     assert exitcode == 0
     assert rule_id in out
 
+    cmd = f"rucio rule list --rses {rule_rse}"
+    exitcode, out, err = execute(cmd)
+    assert exitcode == 0
+    assert rule_id in out
+
     move_rse = "MOCK2"
     cmd = f"rucio rule move {rule_id} --rses {move_rse}"
     exitcode, out, err = execute(cmd)
