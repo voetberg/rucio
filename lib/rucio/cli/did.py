@@ -11,10 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import click
+import math
+from typing import Optional
 
-from rucio.cli.bin_legacy.rucio import add_container, add_dataset, attach, close, delete_metadata, detach, erase, get_metadata, list_content, list_content_history, list_dids, list_parent_dids, reopen, set_metadata, stat, touch
-from rucio.cli.utils import Arguments
+import click
+from rich.text import Text
+from tabulate import tabulate
+
+from rucio.cli.utils import get_scope
+from rucio.client.richclient import CLITheme, generate_table, print_output
+from rucio.common.config import config_get
+from rucio.common.exception import InputValidationError, InvalidObject, RucioException, ScopeNotFound
+from rucio.common.utils import chunks, parse_did_filter_from_string_fe
 
 
 @click.group()
@@ -38,18 +46,80 @@ def did():
 @click.argument("did-pattern", nargs=-1, required=True)
 @click.option("--parent", default=False, is_flag=True, help="List the parents of the DID - must use a full DID scope and name")
 @click.pass_context
-def list_(ctx, did_pattern, recursive, filter_, short, parent):
+def list_(ctx: click.Context, did_pattern: str, recursive: bool, filter_: Optional[str], short: bool, parent: bool):
     """
     List the Data IDentifiers matching certain pattern.
     Only the collections (i.e. dataset or container) are returned by default.
     With the filter option, you can specify a list of metadata that the Data IDentifier should match
     """
+    table_data = []
+
     if parent:
+        if len(did_pattern) == 0:  # Hypothetically impossible, but good check to have
+            raise InputValidationError('A DID must be provided. Use -h to list the options.')
+
         for did in did_pattern:
-            list_parent_dids(Arguments({"no_pager": ctx.obj.no_pager, "did": did}), ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
+            if ctx.obj.use_rich:
+                ctx.obj.spinner.update(status='Fetching parent DIDs')
+                ctx.obj.spinner.start()
+
+            scope, name = get_scope(did, ctx.obj.client)
+            for dataset in ctx.obj.client.list_parent_dids(scope=scope, name=name):
+                if ctx.obj.use_rich:
+                    table_data.append([f"{dataset['scope']}:{dataset['name']}", Text(dataset['type'], style=CLITheme.DID_TYPE.get(dataset['type'], 'default'))])
+                else:
+                    table_data.append([f"{dataset['scope']}:{dataset['name']}", dataset['type']])
+
+            if ctx.obj.use_rich:
+                table = generate_table(table_data, headers=['SCOPE:NAME', '[DID TYPE]'], col_alignments=['left', 'left'])
+                ctx.obj.spinner.stop()
+                print_output(table, console=ctx.obj.console, no_pager=ctx.obj.no_pager)
+            else:
+                print(tabulate(table_data, tablefmt=ctx.obj.tablefmt, headers=['SCOPE:NAME', '[DID TYPE]']))
+
     else:
-        args = Arguments({"no_pager": ctx.obj.no_pager, "did": did_pattern, "recursive": recursive, "filter": filter_, "short": short})
-        list_dids(args, ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
+        try:
+            scope, name = get_scope(did_pattern[0], ctx.obj.client)
+            if name == '':
+                name = '*'
+        except InvalidObject:
+            scope = did_pattern[0]
+            name = '*'
+
+        if scope not in ctx.obj.client.list_scopes():
+            raise ScopeNotFound
+
+        if recursive and '*' in name:
+            raise InputValidationError('Option recursive cannot be used with wildcards.')
+        else:
+            if filter_:
+                if ('name' in filter_) and (name != '*'):
+                    raise ValueError('Must have a wildcard in did name if filtering by name.')
+            else:
+                filter_ = ""
+                
+        filters, type_ = parse_did_filter_from_string_fe(filter_, name)
+
+        if ctx.obj.use_rich:
+            ctx.obj.spinner.update(status='Fetching DIDs')
+            ctx.obj.spinner.start()
+
+        for did in ctx.obj.client.list_dids(scope, filters=filters, did_type=type_, long=True, recursive=recursive):
+            if ctx.obj.use_rich:
+                table_data.append([f"{did['scope']}:{did['name']}", Text(did['did_type'], style=CLITheme.DID_TYPE.get(did['did_type'], 'default'))])
+            else:
+                table_data.append([f"{did['scope']}:{did['name']}", did['did_type']])
+
+        if short:
+            for did, _ in table_data:
+                print(did)
+        else:
+            if ctx.obj.use_rich:
+                table = generate_table(table_data, headers=['SCOPE:NAME', '[DID TYPE]'], col_alignments=['left', 'left'])
+                ctx.obj.spinner.stop()
+                print_output(table, console=ctx.obj.console, no_pager=ctx.obj.no_pager)
+            else:
+                print(tabulate(table_data, tablefmt=ctx.obj.tablefmt, headers=['SCOPE:NAME', '[DID TYPE]']))
 
 
 @did.command("show")
@@ -57,7 +127,32 @@ def list_(ctx, did_pattern, recursive, filter_, short, parent):
 @click.pass_context
 def show(ctx, dids):
     """List attributes, statuses, or parents for data identifiers"""
-    stat(Arguments({"no_pager": ctx.obj.no_pager, "dids": dids}), ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
+    if ctx.obj.use_rich:
+        ctx.obj.spinner.update(status='Fetching DID stats')
+        ctx.obj.spinner.start()
+        keyword_styles = {**CLITheme.BOOLEAN, **CLITheme.DID_TYPE}
+
+    output = []
+    for i, did in enumerate(dids):
+        scope, name = get_scope(did, ctx.obj.client)
+        info = ctx.obj.client.get_did(scope=scope, name=name, dynamic_depth='DATASET')
+        if ctx.obj.use_rich:
+            if i > 0:
+                output.append(Text(f'\nDID: {did}', style=CLITheme.TEXT_HIGHLIGHT))
+            elif len(dids) > 1:
+                output.append(Text(f'DID: {did}', style=CLITheme.TEXT_HIGHLIGHT))
+            table_data = [(k, Text(str(v), style=keyword_styles.get(str(v), 'default'))) for (k, v) in sorted(info.items())]
+            table = generate_table(table_data, row_styles=['none'], col_alignments=['left', 'left'])
+            output.append(table)
+        else:
+            if i > 0:
+                print('------')
+            table = [(k + ':', str(v)) for (k, v) in sorted(info.items())]
+            print(tabulate(table, tablefmt='plain', disable_numparse=True))
+
+    if ctx.obj.use_rich:
+        ctx.obj.spinner.stop()
+        print_output(*output, console=ctx.obj.console, no_pager=ctx.obj.no_pager)
 
 
 @did.command("add")
@@ -68,11 +163,14 @@ def show(ctx, dids):
 @click.pass_context
 def add_(ctx, did_name, dtype, monotonic, lifetime):
     """Create a new collection-type DID"""
-    args = Arguments({"no_pager": ctx.obj.no_pager, "did": did_name, "monotonic": monotonic, "lifetime": lifetime})
     if dtype == "container":
-        add_container(args, ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
+        scope, name = get_scope(did_name, ctx.obj.client)
+        ctx.obj.client.add_container(scope=scope, name=name, statuses={'monotonic': monotonic}, lifetime=lifetime)
+        print('Added %s:%s' % (scope, name))
     else:
-        add_dataset(args, ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
+        scope, name = get_scope(did_name, ctx.obj.client)
+        ctx.obj.client.add_dataset(scope=scope, name=name, statuses={'monotonic': monotonic}, lifetime=lifetime)
+        print('Added %s:%s' % (scope, name))
 
 
 @did.command("update")
@@ -84,15 +182,18 @@ def add_(ctx, did_name, dtype, monotonic, lifetime):
 @click.pass_context
 def update(ctx, dids, rse, operation):
     """Touch one or more DIDs and set the last accessed date to the current date, or mark them as open or closed."""
-    args = Arguments({"no_pager": ctx.obj.no_pager, "dids": dids, "rse": rse})
-    if operation == "touch":
-        touch(args, ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
-    elif operation == "open":
-        reopen(args, ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
-    elif operation == "close":
-        close(args, ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
-    else:
-        raise ValueError("No operation specified, please use `--help` to see possibilities")  # Should not be possible, but better safe than sorry
+    for did in dids:
+        scope, name = get_scope(did, ctx.obj.client)
+        if operation == "touch":
+            ctx.obj.client.touch(scope, name, rse)
+        elif operation == "open":
+            ctx.obj.client.set_status(scope=scope, name=name, open=True)
+            print(f'{scope}:{name} has been reopened.')
+        elif operation == "close":
+            ctx.obj.client.set_status(scope=scope, name=name, open=False)
+            print(f'{scope}:{name} has been closed.')
+        else:
+            raise ValueError("No operation specified, please use `--help` to see possibilities")  # Should not be possible, but better safe than sorry
 
 
 @did.command("remove")
@@ -105,7 +206,33 @@ def remove(ctx, dids, undo):
     Expired DIDs are force-deleted (and their replicas purged).
     The deletion is not reversible after 24 hours grace time period expired
     """
-    erase(Arguments({"no_pager": ctx.obj.no_pager, "dids": dids, "undo": undo}), ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
+    for did in dids:
+        if '*' in did:
+            ctx.obj.logger.warning("This command doesn't support wildcards! Skipping DID: %s" % did)
+            continue
+        try:
+            scope, name = get_scope(did, ctx.obj.client)
+        except RucioException as error:
+            ctx.obj.logger.warning('DID is in wrong format: %s' % did)
+            ctx.obj.logger.debug('Error: %s' % error)
+            continue
+
+        if undo:
+            try:
+                ctx.obj.client.set_metadata(scope=scope, name=name, key='lifetime', value=None)
+                ctx.obj.logger.info('Erase undo for DID: {0}:{1}'.format(scope, name))
+            except Exception:
+                ctx.obj.logger.warning('Cannot undo erase operation on DID. DID not existent or grace period of 24 hours already expired.')
+                ctx.obj.logger.warning('    DID: {0}:{1}'.format(scope, name))
+        else:
+            try:
+                # set lifetime to expire in 24 hours (value is in seconds).
+                ctx.obj.client.set_metadata(scope=scope, name=name, key='lifetime', value=86400)
+                ctx.obj.logger.info('CAUTION! erase operation is irreversible after 24 hours. To cancel this operation you can run the following command:')
+                print("rucio erase --undo {0}:{1}".format(scope, name))
+            except RucioException as error:
+                ctx.obj.logger.warning('Failed to erase DID: %s' % did)
+                ctx.obj.logger.debug('Error: %s' % error)
 
 
 @did.group()
@@ -118,7 +245,25 @@ def content():
 @click.pass_context
 def content_history(ctx, dids):
     """List the content history of a collection-type DID"""
-    list_content_history(Arguments({"no_pager": ctx.obj.no_pager, "dids": dids}), ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
+    table_data = []
+    if ctx.obj.use_rich:
+        ctx.obj.spinner.update(status='Fetching content history')
+        ctx.obj.spinner.start()
+
+    for did in dids:
+        scope, name = get_scope(did, ctx.obj.client)
+        for content in ctx.obj.client.list_content_history(scope=scope, name=name):
+            if ctx.obj.use_rich:
+                table_data.append([f"{content['scope']}:{content['name']}", Text(content['type'].upper(), style=CLITheme.DID_TYPE.get(content['type'].upper(), 'default'))])
+            else:
+                table_data.append([f"{content['scope']}:{content['name']}", content['type'].upper()])
+
+    if ctx.obj.use_rich:
+        table = generate_table(table_data, headers=['SCOPE:NAME', '[DID TYPE]'], col_alignments=['left', 'left'])
+        ctx.obj.spinner.stop()
+        print_output(table, console=ctx.obj.console, no_pager=ctx.obj.no_pager)
+    else:
+        print(tabulate(table_data, tablefmt=ctx.obj.tablefmt, headers=['SCOPE:NAME', '[DID TYPE]']))
 
 
 @content.command("add")
@@ -128,8 +273,38 @@ def content_history(ctx, dids):
 @click.pass_context
 def content_add_(ctx, to_did, from_file, dids):
     """Attach a list [dids] of data identifiers (file or collection-type) to another data identifier (collection-type)"""
-    args = Arguments({"no_pager": ctx.obj.no_pager, "dids": dids, "todid": to_did, "fromfile": from_file})
-    attach(args, ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
+    scope, name = get_scope(to_did, ctx.obj.client)
+    limit = 499  # TODO Should it be an argument?
+
+    if from_file:
+        if len(dids) > 1:
+            raise ValueError('If --from-file option is active, only one file is supported. The file should contain a list of dids, one per line.')
+        try:
+            f = open(dids[0], 'r')
+            dids = [did.rstrip() for did in f.readlines()]
+        except OSError as error:
+            ctx.obj.logger.error("Can't open file '" + dids[0] + "'.")
+            raise OSError from error
+
+    dids = [{'scope': get_scope(did, ctx.obj.client)[0], 'name': get_scope(did, ctx.obj.client)[1]} for did in dids]
+    if len(dids) <= limit:
+        ctx.obj.client.attach_dids(scope=scope, name=name, dids=dids)
+    else:
+        ctx.obj.logger.warning("You are trying to attach too much DIDs. Therefore they will be chunked and attached in multiple commands.")
+        missing_dids = []
+        for i, chunk in enumerate(chunks(dids, limit)):
+            ctx.obj.logger.info("Try to attach chunk {0}/{1}".format(i, int(math.ceil(float(len(dids)) / float(limit)))))
+            try:
+                ctx.obj.client.attach_dids(scope=scope, name=name, dids=chunk)
+            except Exception:
+                content = [{'scope': did['scope'], 'name': did['name']} for did in ctx.obj.client.list_content(scope=scope, name=name)]
+                missing_dids += [did for did in chunk if did not in content]
+
+        if missing_dids:
+            for chunk in chunks(missing_dids, limit):
+                ctx.obj.client.attach_dids(scope=scope, name=name, dids=chunk)
+
+    print('DIDs successfully attached to %s:%s' % (scope, name))
 
 
 @content.command("remove")
@@ -138,8 +313,13 @@ def content_add_(ctx, to_did, from_file, dids):
 @click.pass_context
 def content_remove(ctx, dids, from_did):
     """Detach [dids], a list of DIDs (file or collection-type) from another Data Identifier (collection type)"""
-    args = Arguments({"no_pager": ctx.obj.no_pager, "dids": dids, "fromdid": from_did})
-    detach(args, ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
+    scope, name = get_scope(from_did, ctx.obj.client)
+    dids = []
+    for did in dids:
+        cscope, cname = get_scope(did, ctx.obj.client)
+        dids.append({'scope': cscope, 'name': cname})
+    ctx.obj.client.detach_dids(scope=scope, name=name, dids=dids)
+    print('DIDs successfully detached from %s:%s' % (scope, name))
 
 
 @content.command("list")
@@ -148,8 +328,29 @@ def content_remove(ctx, dids, from_did):
 @click.pass_context
 def content_list_(ctx, dids, short):
     """List the content of a collection-type DID"""
-    args = Arguments({"no_pager": ctx.obj.no_pager, "dids": dids, "short": short})
-    list_content(args, ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
+    table_data = []
+    if ctx.obj.use_rich:
+        ctx.obj.spinner.update(status='Fetching dataset contents')
+        ctx.obj.spinner.start()
+
+    for did in dids:
+        scope, name = get_scope(did, ctx.obj.client)
+        for content in ctx.obj.client.list_content(scope=scope, name=name):
+            if ctx.obj.use_rich:
+                table_data.append([f"{content['scope']}:{content['name']}", Text(content['type'].upper(), style=CLITheme.DID_TYPE.get(content['type'].upper(), 'default'))])
+            else:
+                table_data.append([f"{content['scope']}:{content['name']}", content['type'].upper()])
+
+    if short:
+        for did, _ in table_data:
+            print(did)
+    else:
+        if ctx.obj.use_rich:
+            table = generate_table(table_data, headers=['SCOPE:NAME', '[DID TYPE]'], col_alignments=['left', 'left'])
+            ctx.obj.spinner.stop()
+            print_output(table, console=ctx.obj.console, no_pager=ctx.obj.no_pager)
+        else:
+            print(tabulate(table_data, tablefmt=ctx.obj.tablefmt, headers=['SCOPE:NAME', '[DID TYPE]']))
 
 
 @did.group()
@@ -164,8 +365,10 @@ def metadata():
 @click.pass_context
 def metadata_add_(ctx, did, key, value):
     """Add metadata to a DID"""
-    args = Arguments({"no_pager": ctx.obj.no_pager, "did": did, "key": key, "value": value})
-    set_metadata(args, ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
+    if key == 'lifetime':
+        value = None if value.lower() == 'none' else float(value)
+    scope, name = get_scope(did, ctx.obj.client)
+    ctx.obj.client.set_metadata(scope=scope, name=name, key=key, value=value)
 
 
 @metadata.command("remove")
@@ -174,8 +377,8 @@ def metadata_add_(ctx, did, key, value):
 @click.pass_context
 def metadata_remove(ctx, did, key):
     """Remove metadata from a DID"""
-    args = Arguments({"no_pager": ctx.obj.no_pager, "did": did, "key": key})
-    delete_metadata(args, ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
+    scope, name = get_scope(did, ctx.obj.client)
+    ctx.obj.client.delete_metadata(scope=scope, name=name, key=key)
 
 
 @metadata.command("list")
@@ -184,5 +387,32 @@ def metadata_remove(ctx, did, key):
 @click.pass_context
 def metadata_list_(ctx, dids, plugin):
     """List metadata for a list of DIDs"""
-    args = Arguments({"no_pager": ctx.obj.no_pager, "dids": dids, "plugin": plugin})
-    get_metadata(args, ctx.obj.client, ctx.obj.logger, ctx.obj.console, ctx.obj.spinner)
+    if plugin is None:
+        plugin = config_get('client', 'metadata_default_plugin', default='DID_COLUMN')
+
+    if ctx.obj.use_rich:
+        ctx.obj.spinner.update(status='Fetching metadata')
+        ctx.obj.spinner.start()
+        keyword_styles = {**CLITheme.BOOLEAN, **CLITheme.DID_TYPE, **CLITheme.AVAILABILITY}
+
+    output = []
+    for i, did in enumerate(dids):
+        scope, name = get_scope(did, ctx.obj.client)
+        meta = ctx.obj.client.get_metadata(scope=scope, name=name, plugin=plugin)
+        if ctx.obj.use_rich:
+            if i > 0:
+                output.append(Text(f'\nDID: {did}', style=CLITheme.TEXT_HIGHLIGHT))
+            elif len(dids) > 1:
+                output.append(Text(f'DID: {did}', style=CLITheme.TEXT_HIGHLIGHT))
+            table_data = [(k, Text(str(v), style=keyword_styles.get(str(v), 'default'))) for (k, v) in sorted(meta.items())]
+            table = generate_table(table_data, col_alignments=['left', 'left'], row_styles=['none'])
+            output.append(table)
+        else:
+            if i > 0:
+                print('------')
+            table = [(k + ':', str(v)) for (k, v) in sorted(meta.items())]
+            print(tabulate(table, tablefmt='plain', disable_numparse=True))
+
+    if ctx.obj.use_rich:
+        ctx.obj.spinner.stop()
+        print_output(*output, console=ctx.obj.console, no_pager=ctx.obj.no_pager)

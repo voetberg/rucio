@@ -43,7 +43,7 @@ from rucio.common.exception import (
     RuleNotFound,
     UnsupportedOperation,
 )
-from rucio.common.utils import setup_logger
+from rucio.common.utils import extract_scope, setup_logger
 
 SUCCESS = 0
 FAILURE = 1
@@ -234,6 +234,17 @@ def setup_gfal2_logger():
     gfal2_logger = logging.getLogger("gfal2")
     gfal2_logger.setLevel(logging.CRITICAL)
     gfal2_logger.addHandler(logging.StreamHandler())
+
+
+def get_scope(did, client):
+    try:
+        scope, name = extract_scope(did)
+        return scope, name
+    except TypeError:
+        scopes = client.list_scopes()
+        scope, name = extract_scope(did, scopes)
+        return scope, name
+    return None, did
 
 
 class Arguments(dict):
