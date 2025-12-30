@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
-from typing import Optional
+from typing import Literal, Optional, Union
 
 import click
 from rich.text import Text
@@ -46,7 +46,7 @@ def did():
 @click.argument("did-pattern", nargs=-1, required=True)
 @click.option("--parent", default=False, is_flag=True, help="List the parents of the DID - must use a full DID scope and name")
 @click.pass_context
-def list_(ctx: click.Context, did_pattern: str, recursive: bool, filter_: Optional[str], short: bool, parent: bool):
+def list_(ctx: click.Context, did_pattern: str, recursive: bool, filter_: Optional[str], short: bool, parent: bool) -> None:
     """
     List the Data IDentifiers matching certain pattern.
     Only the collections (i.e. dataset or container) are returned by default.
@@ -97,7 +97,7 @@ def list_(ctx: click.Context, did_pattern: str, recursive: bool, filter_: Option
                     raise ValueError('Must have a wildcard in did name if filtering by name.')
             else:
                 filter_ = ""
-                
+
         filters, type_ = parse_did_filter_from_string_fe(filter_, name)
 
         if ctx.obj.use_rich:
@@ -125,7 +125,7 @@ def list_(ctx: click.Context, did_pattern: str, recursive: bool, filter_: Option
 @did.command("show")
 @click.argument("dids", nargs=-1)
 @click.pass_context
-def show(ctx, dids):
+def show(ctx: click.Context, dids: str) -> None:
     """List attributes, statuses, or parents for data identifiers"""
     if ctx.obj.use_rich:
         ctx.obj.spinner.update(status='Fetching DID stats')
@@ -161,7 +161,7 @@ def show(ctx, dids):
 @click.option("--monotonic", is_flag=True, default=False, help="Monotonic status to True.")
 @click.option("--lifetime", type=int, help="Lifetime in seconds.")
 @click.pass_context
-def add_(ctx, did_name, dtype, monotonic, lifetime):
+def add_(ctx: click.Context, did_name: str, dtype: Literal['container', 'dataset'], monotonic: bool, lifetime: Optional[int]) -> None:
     """Create a new collection-type DID"""
     if dtype == "container":
         scope, name = get_scope(did_name, ctx.obj.client)
@@ -180,7 +180,7 @@ def add_(ctx, did_name, dtype, monotonic, lifetime):
 @click.option("--open", "operation", flag_value="open", help="Reopen a dataset or container (only for privileged users)")
 @click.option("--close", "operation", flag_value="close", help="Close a dataset or container.")
 @click.pass_context
-def update(ctx, dids, rse, operation):
+def update(ctx: click.Context, dids: list, rse: Optional[str], operation: Literal["touch", "open", "close"]) -> None:
     """Touch one or more DIDs and set the last accessed date to the current date, or mark them as open or closed."""
     for did in dids:
         scope, name = get_scope(did, ctx.obj.client)
@@ -200,7 +200,7 @@ def update(ctx, dids, rse, operation):
 @click.option("--undo", is_flag=True, default=False, help="Undo erase DIDs. Only works if has been less than 24 hours since erase operation.")
 @click.argument("dids", nargs=-1)
 @click.pass_context
-def remove(ctx, dids, undo):
+def remove(ctx: click.Context, dids: list[str], undo: bool) -> None:
     """
     This command sets the lifetime of the DID in order to expire in the next 24 hours.
     Expired DIDs are force-deleted (and their replicas purged).
@@ -243,7 +243,7 @@ def content():
 @content.command("history")
 @click.argument("dids", nargs=-1, required=True)
 @click.pass_context
-def content_history(ctx, dids):
+def content_history(ctx: click.Context, dids: list[str]) -> None:
     """List the content history of a collection-type DID"""
     table_data = []
     if ctx.obj.use_rich:
@@ -271,7 +271,7 @@ def content_history(ctx, dids):
 @click.option("-f", "--from-file", is_flag=True, default=False, help="[DIDs] is a file instead of a list of did names. The file should contain one did per line.")
 @click.argument("dids", nargs=-1)
 @click.pass_context
-def content_add_(ctx, to_did, from_file, dids):
+def content_add_(ctx: click.Context, to_did: str, from_file: bool, dids: list[str]) -> None:
     """Attach a list [dids] of data identifiers (file or collection-type) to another data identifier (collection-type)"""
     scope, name = get_scope(to_did, ctx.obj.client)
     limit = 499  # TODO Should it be an argument?
@@ -286,13 +286,13 @@ def content_add_(ctx, to_did, from_file, dids):
             ctx.obj.logger.error("Can't open file '" + dids[0] + "'.")
             raise OSError from error
 
-    dids = [{'scope': get_scope(did, ctx.obj.client)[0], 'name': get_scope(did, ctx.obj.client)[1]} for did in dids]
+    attached_dids = [{'scope': get_scope(did, ctx.obj.client)[0], 'name': get_scope(did, ctx.obj.client)[1]} for did in dids]
     if len(dids) <= limit:
-        ctx.obj.client.attach_dids(scope=scope, name=name, dids=dids)
+        ctx.obj.client.attach_dids(scope=scope, name=name, dids=attached_dids)
     else:
         ctx.obj.logger.warning("You are trying to attach too much DIDs. Therefore they will be chunked and attached in multiple commands.")
         missing_dids = []
-        for i, chunk in enumerate(chunks(dids, limit)):
+        for i, chunk in enumerate(chunks(attached_dids, limit)):
             ctx.obj.logger.info("Try to attach chunk {0}/{1}".format(i, int(math.ceil(float(len(dids)) / float(limit)))))
             try:
                 ctx.obj.client.attach_dids(scope=scope, name=name, dids=chunk)
@@ -308,17 +308,17 @@ def content_add_(ctx, to_did, from_file, dids):
 
 
 @content.command("remove")
-@click.option("-f", "--from-did", help="Collection-type DID to remove DIDs from")
+@click.option("-f", "--from-did", help="Collection-type DID to remove DIDs from", required=True)
 @click.argument("dids", nargs=-1)
 @click.pass_context
-def content_remove(ctx, dids, from_did):
+def content_remove(ctx: click.Context, dids: list[str], from_did: str) -> None:
     """Detach [dids], a list of DIDs (file or collection-type) from another Data Identifier (collection type)"""
     scope, name = get_scope(from_did, ctx.obj.client)
-    dids = []
+    given_dids = []
     for did in dids:
         cscope, cname = get_scope(did, ctx.obj.client)
-        dids.append({'scope': cscope, 'name': cname})
-    ctx.obj.client.detach_dids(scope=scope, name=name, dids=dids)
+        given_dids.append({'scope': cscope, 'name': cname})
+    ctx.obj.client.detach_dids(scope=scope, name=name, dids=given_dids)
     print('DIDs successfully detached from %s:%s' % (scope, name))
 
 
@@ -326,7 +326,7 @@ def content_remove(ctx, dids, from_did):
 @click.argument("dids", nargs=-1, required=True)
 @click.option("--short", is_flag=True, default=False, help="Just dump the list of DIDs.")
 @click.pass_context
-def content_list_(ctx, dids, short):
+def content_list_(ctx: click.Context, dids: list[str], short: bool) -> None:
     """List the content of a collection-type DID"""
     table_data = []
     if ctx.obj.use_rich:
@@ -363,10 +363,10 @@ def metadata():
 @click.option('--key', help='Attribute key', required=True)
 @click.option('--value', help='Attribute value', required=True)
 @click.pass_context
-def metadata_add_(ctx, did, key, value):
+def metadata_add_(ctx: click.Context, did: str, key: str, value: Union[str, int]) -> None:
     """Add metadata to a DID"""
     if key == 'lifetime':
-        value = None if value.lower() == 'none' else float(value)
+        value = None if value.lower() == 'none' else float(value)  # type: ignore
     scope, name = get_scope(did, ctx.obj.client)
     ctx.obj.client.set_metadata(scope=scope, name=name, key=key, value=value)
 
@@ -375,7 +375,7 @@ def metadata_add_(ctx, did, key, value):
 @click.argument("did")
 @click.option("--key", help="Key to remove from a DID's metadata.")
 @click.pass_context
-def metadata_remove(ctx, did, key):
+def metadata_remove(ctx: click.Context, did: str, key: str) -> None:
     """Remove metadata from a DID"""
     scope, name = get_scope(did, ctx.obj.client)
     ctx.obj.client.delete_metadata(scope=scope, name=name, key=key)
@@ -385,7 +385,7 @@ def metadata_remove(ctx, did, key):
 @click.argument("dids", nargs=-1)
 @click.option("--plugin", help="Filter down to metadata from specific metadata plugin")
 @click.pass_context
-def metadata_list_(ctx, dids, plugin):
+def metadata_list_(ctx: click.Context, dids: list[str], plugin: Optional[str]):
     """List metadata for a list of DIDs"""
     if plugin is None:
         plugin = config_get('client', 'metadata_default_plugin', default='DID_COLUMN')
