@@ -20,7 +20,7 @@ from rucio.common.constants import RseAttr
 from rucio.common.extra import import_extras
 from rucio.core.rse import get_rse_attribute
 from rucio.rse.protocols.protocol import RSEProtocol
-from rucio.transfertool.globus_library import get_transfer_client, send_bulk_delete_task, send_delete_task
+from rucio.transfertool.globus import GlobusTransferTool
 
 EXTRA_MODULES = import_extras(['globus_sdk'])
 
@@ -28,7 +28,7 @@ if EXTRA_MODULES['globus_sdk']:
     from globus_sdk import TransferAPIError  # pylint: disable=import-error
 
 
-class GlobusRSEProtocol(RSEProtocol):
+class Default(RSEProtocol):
     """ Implementing access to RSEs using the Globus service as a Rucio RSE protocol. """
 
     def __init__(self, protocol_attr, rse_settings, logger=logging.log):
@@ -36,9 +36,10 @@ class GlobusRSEProtocol(RSEProtocol):
 
             :param props: Properties of the requested protocol
         """
-        super(GlobusRSEProtocol, self).__init__(protocol_attr, rse_settings, logger=logger)
+        super(Default, self).__init__(protocol_attr, rse_settings, logger=logger)
         self.globus_endpoint_id = get_rse_attribute(self.rse.get('id'), RseAttr.GLOBUS_ENDPOINT_ID)
         self.logger = logger
+        self.globus_tools = GlobusTransferTool(self.attributes["hostname"], self.logger)
 
     def lfns2pfns(self, lfns):
         """
@@ -144,14 +145,14 @@ class GlobusRSEProtocol(RSEProtocol):
 
         filepath = '/'.join(path.split('/')[0:-1]) + '/'
         filename = path.split('/')[-1]
-
-        transfer_client = get_transfer_client()
         exists = False
 
         if self.globus_endpoint_id:
             try:
-                resp = transfer_client.operation_ls(endpoint_id=self.globus_endpoint_id, path=filepath)
-                exists = len([r for r in resp if r['name'] == filename]) > 0
+                with self.globus_tools.client_app() as client_app:
+                    with self.globus_tools.transfer_client(client_app) as tc:
+                        resp = tc.operation_ls(endpoint_id=self.globus_endpoint_id, path=filepath)
+                        exists = len([r for r in resp if r['name'] == filename]) > 0
             except TransferAPIError as err:
                 print(err)
         else:
@@ -169,14 +170,14 @@ class GlobusRSEProtocol(RSEProtocol):
             :returns: List of items
 
         """
-
-        transfer_client = get_transfer_client()
         items = []
 
         if self.globus_endpoint_id:
             try:
-                resp = transfer_client.operation_ls(endpoint_id=self.globus_endpoint_id, path=path)
-                items = resp['DATA']
+                with self.globus_tools.client_app() as client_app:
+                    with self.globus_tools.transfer_client(client_app) as tc:
+                        resp = tc.operation_ls(endpoint_id=self.globus_endpoint_id, path=path)
+                        items = resp['DATA']
             except TransferAPIError as err:
                 print(err)
         else:
@@ -195,7 +196,10 @@ class GlobusRSEProtocol(RSEProtocol):
         """
         if self.globus_endpoint_id:
             try:
-                delete_response = send_delete_task(endpoint_id=self.globus_endpoint_id, path=path, logger=self.logger)
+                with self.globus_tools.client_app() as client_app:
+                    with self.globus_tools.transfer_client(client_app) as dc:
+                        delete_data = self.globus_tools.build_delete_data([path], endpoint_id=self.globus_endpoint_id)
+                        delete_response = dc.submit_delete(delete_data)
             except TransferAPIError as err:
                 self.logger(logging.WARNING, str(err))
                 raise exception.RucioException(err)
@@ -216,14 +220,17 @@ class GlobusRSEProtocol(RSEProtocol):
         """
         if self.globus_endpoint_id:
             try:
-                bulk_delete_response = send_bulk_delete_task(endpoint_id=self.globus_endpoint_id, pfns=pfns, logger=self.logger)
+                with self.globus_tools.client_app() as client_app:
+                    with self.globus_tools.transfer_client(client_app) as dc:
+                        delete_data = self.globus_tools.build_delete_data(pfns, endpoint_id=self.globus_endpoint_id)
+                        delete_response = dc.submit_delete(delete_data)
             except TransferAPIError as err:
                 raise exception.RucioException(err)
         else:
             raise exception.RucioException('No rse attribute found for globus endpoint id.')
 
-        if bulk_delete_response['code'] != 'Accepted':
-            self.logger(logging.DEBUG, 'delete_response: %s' % bulk_delete_response)
+        if delete_response['code'] != 'Accepted':
+            self.logger(logging.DEBUG, 'delete_response: %s' % delete_response)
             raise exception.RucioException('delete_task not accepted by Globus')
 
     def connect(self):
