@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+from typing import Any, Optional, Union
 from urllib.parse import urlparse
 
 from rucio.common import exception
@@ -41,7 +42,7 @@ class Default(RSEProtocol):
         self.logger = logger
         self.globus_tools = GlobusTransferTool(self.attributes["hostname"], self.logger)
 
-    def lfns2pfns(self, lfns):
+    def lfns2pfns(self, lfns: Union[list[dict[str, str]], dict[str, str]]) -> dict[str, str]:
         """
             Returns a fully qualified PFN for the file referred by path.
 
@@ -67,7 +68,7 @@ class Default(RSEProtocol):
                 pfns['%s:%s' % (scope, name)] = ''.join([prefix, self._get_path(scope=scope, name=name)])
         return pfns
 
-    def _get_path(self, scope, name):
+    def _get_path(self, scope: str, name: str) -> str:
         """ Transforms the logical file name into a PFN.
             Suitable for sites implementing the RUCIO naming convention.
             This implementation is only invoked if the RSE is deterministic.
@@ -77,9 +78,9 @@ class Default(RSEProtocol):
 
             :returns: RSE specific URI of the physical file
         """
-        return self.translator.path(scope, name)
+        return self.translator.path(scope=scope, name=name)
 
-    def parse_pfns(self, pfns):
+    def parse_pfns(self, pfns: Union[list[str], str]) -> dict[str, Any]:
         """
             Splits the given PFN into the parts known by the protocol. It is also checked if the provided protocol supports the given PFNs.
 
@@ -160,7 +161,7 @@ class Default(RSEProtocol):
 
         return exists
 
-    def list(self, path):
+    def list(self, path: str) -> list:
         """
 
             Checks if the requested path is known by the referred RSE and returns a list of items
@@ -185,7 +186,7 @@ class Default(RSEProtocol):
 
         return items
 
-    def delete(self, path):
+    def delete(self, path: str) -> None:
         """
             Deletes a file from the connected RSE.
 
@@ -210,7 +211,7 @@ class Default(RSEProtocol):
             self.logger(logging.DEBUG, 'delete_response: %s' % delete_response)
             raise exception.RucioException('delete_task not accepted by Globus')
 
-    def bulk_delete(self, pfns):
+    def bulk_delete(self, pfns: str) -> None:
         """
             Submits an async task to bulk delete files on globus endpoint.
 
@@ -248,3 +249,54 @@ class Default(RSEProtocol):
             reaper2 daemon requires implementation of protocol.close
         """
         pass
+
+    def put(
+            self,
+            source: str,
+            target: str,
+            source_dir: Optional[str],
+            transfer_timeout: Optional[int] = None
+    ) -> None:
+        """
+            Allows to store files inside the referred RSE.
+
+            :param source: path to the source file on the client file system
+            :param target: path to the destination file on the storage
+            :param source_dir: Path where the to be transferred files are stored in the local file system
+            :param transfer_timeout: Transfer timeout (in seconds)
+        """
+        msg = "Cannot automatically upload files from Globus. Please use the web portal."
+        raise NotImplementedError(msg)
+
+    def rename(
+            self,
+            path: str,
+            new_path: str
+    ) -> None:
+        """ Allows to rename a file stored inside the connected RSE.
+
+            :param path: path to the current file on the storage
+            :param new_path: path to the new file on the storage
+
+            :raises TransferAPIError: Could not complete the rename operation
+        """
+        with self.globus_tools.client_app() as client_app:
+            with self.globus_tools.transfer_client(client_app) as tc:
+                tc.operation_name(self.globus_endpoint_id, path, new_path)
+
+    def get(
+            self,
+            path: str,
+            dest: str,
+            transfer_timeout: Optional[int] = None
+    ) -> None:
+        """
+            Provides access to files stored inside connected the RSE.
+
+            :param path: Physical file name of requested file
+            :param dest: Name and path of the files when stored at the client
+            :param transfer_timeout: Transfer timeout (in seconds)
+
+         """
+        msg = "Cannot automatically download files from Globus. Please use the web portal."
+        raise NotImplementedError(msg)
