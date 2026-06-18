@@ -135,18 +135,15 @@ class GlobusTransferTool(Transfertool):
 
         return client_id, client_secret
 
-    def client_app(self) -> globus_sdk.ClientApp:
+    def client_app(self) -> globus_sdk.ConfidentialAppAuthClient:
+        # Refer to: https://globus-sdk-python.readthedocs.io/en/stable/examples/client_credentials.html#using-clientcredentialsauthorizer
         client_id, client_secret = self.__read_secrets()
-        app_config = globus_sdk.GlobusAppConfig()
-        return globus_sdk.ClientApp(
-            self.service_name,
-            client_id=client_id,
-            client_secret=client_secret,
-            config=app_config
-        )
+        return globus_sdk.ConfidentialAppAuthClient(client_id=client_id, client_secret=client_secret)
 
-    def transfer_client(self, client_app: globus_sdk.ClientApp) -> globus_sdk.TransferClient:
-        return globus_sdk.TransferClient(app=client_app)
+    def transfer_client(self, client_app: globus_sdk.ConfidentialAppAuthClient) -> globus_sdk.TransferClient:
+        # Authorize with the secrets
+        cc_authorizer = globus_sdk.ClientCredentialsAuthorizer(client_app, globus_sdk.TransferClient.scopes.all)
+        return globus_sdk.TransferClient(app=cc_authorizer)
 
     def build_transfer_data(self, data_paths: dict[str, str], job_label: str, source_endpoint_id: str, destination_endpoint_id: str) -> globus_sdk.TransferData:
         deadline = datetime.datetime.utcnow() + datetime.timedelta(minutes=self.globus_task_deadline)
