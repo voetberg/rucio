@@ -20,11 +20,13 @@ import pytest
 import rucio.common.exception
 import rucio.common.schema
 import rucio.core.permission
+from rucio.common import config
 from rucio.common.constants import DEFAULT_VO
 from rucio.common.plugins import PolicyPackageAlgorithms
 from rucio.common.types import InternalAccount
 from rucio.db.sqla.constants import DatabaseOperationType
 from rucio.db.sqla.session import db_session
+from rucio.tests.common import auth, headers
 
 
 class TestPolicyPackageGeneric:
@@ -137,3 +139,58 @@ class TestPolicyPackage:
             os.environ['RUCIO_POLICY_PACKAGE'] = old_pp_env
         else:
             del os.environ['RUCIO_POLICY_PACKAGE']
+
+    @pytest.mark.parametrize(
+            "algo_name,algo_kwargs,expected_resp",
+            [
+                ("lfn2pfn", {"scope": "scope", "name": "name", "rse": "", "rse_attrs": "", "protocol_attrs": ""}, '"scope/c0/c2/name"\n'),
+                ("pfn2lfn", {"parsed_pfn": {"path": "scope/c0/c2/", "name": "name"}}, '["name","scope"]\n'),
+                ("permission", {"issuer": "jdoe", "action": "add_rule", "extra_kwargs": {"account": "jdoe", "locked": False}}, "true\n"),
+                ("permission", {"issuer": "jdoe", "action": "del_account", "extra_kwargs": {"account": "root"}}, "false\n"),
+                ("schema", {"obj": "USER", "name": "account_type"}, "true\n"),
+                ("schema", {"obj": "BAD.VERYBAD", "name": "account_type"}, "false\n")
+
+            ],
+            ids=[
+                "lfn2pfn",
+                "pfn2lfn",
+                'premission_allow',
+                "premission_forbid",
+                "schema_accept",
+                "schema_deny"
+                ]
+    )
+    def test_rest_access_default(self, rest_client, auth_token, algo_name, algo_kwargs, expected_resp):
+        "Policies (REST): Access default algorithms through the rest API"
+        route = f"/plugin/{algo_name}"
+        response = rest_client.post(route, headers=headers(auth(auth_token)), json=algo_kwargs)
+        assert response.status_code == 200
+        assert response.text == expected_resp
+
+    @pytest.mark.noparallel(reason='Changes config')
+    def test_rest_access_forbid_algo(self, rest_client, auth_token):
+        """Policies (REST): Query an existing policy with a bad algorithm, and a non-existing policy"""
+        config_option = None
+        if config.config_get("policy", "scope", raise_exception=False) is not None:
+            config_option = config.config_get("policy", "scope")
+
+        config.config_set("policy", "scope", "NOT-THERE")
+        try:
+            route = "/plugin/scope"
+            response = rest_client.post(route, headers=headers(auth(auth_token)), json={})
+            assert response.status_code == 500
+
+        finally:
+            if config_option is not None:
+                config.config_set("policy", "scope", config_option)
+            else:
+                config.config_remove_option("policy", "scope")
+
+        route = 'plugin/FAKE_ALGORITHM'
+        response = rest_client.post(route, headers=headers(auth(auth_token)), json={})
+        assert response.status_code == 400
+
+    def test_rest_acess_missing_args(self, rest_client, auth_token):
+        args = {"scope": "scope", "name": "name"}  # needs rse specific args
+        response = rest_client.post("/plugin/lfn2pfn", headers=headers(auth(auth_token)), json=args)
+        assert response.status_code == 400
