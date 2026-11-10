@@ -51,12 +51,12 @@ DEFAULT_ENDPOINTS = {
     'subscriptions',
     'opendata',
     'opendata_public',
+    'plugin',
 }
 
 
 def apply_endpoints(app: Flask, modules: "Iterable[str]") -> None:
     for blueprint_module in modules:
-
         # instead of using the 'accountlimits' endpoint, use the legacy_blueprint in 'accounts'
         if blueprint_module == "accountlimits":
             logging.log(logging.WARNING, "Endpoint `accountlimits` has been integrated into `accounts` and will be removed in future releases")
